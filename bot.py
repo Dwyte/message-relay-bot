@@ -2,7 +2,8 @@ import discord
 import asyncio
 import configparser as cfg
 import re
-import glob,os
+import glob
+import os
 
 client = discord.Client()
 loop = asyncio.get_event_loop()
@@ -13,38 +14,53 @@ def parse_config(section, field):
     parser.read("config.cfg")
     return parser.get(section, field)
 
+def parse_settings():
+    modeStr = parse_config('settings', 'mode')
+    mode = False if modeStr == "False" else True
+
+    listStr = parse_config('settings', 'list').replace(" ", "")
+    listArr = listStr.split(',')
+    
+    for counter,_id in enumerate(listArr):
+        listArr[counter] = int(_id)
+
+    return (mode, listArr)
+
+settings = parse_settings()
 
 @client.event
 async def on_message(message):
     if message.author == client.user:
         return
 
-    files = []
     for counter, attachment in enumerate(message.attachments):
         file_path = os.getcwd() + "/file{}.png".format(counter)
 
         await attachment.save(file_path)
-
-        files.append(discord.File(file_path))
-
-    # x = await message.attachments[0].save()
-
-    # y = discord.File(os.getcwd() + "/file.png")
 
     channel_mentions = message.channel_mentions
 
     if len(channel_mentions):
         output = "**User: {}**\n".format(message.author)
         output += message.content
+        output = output.replace("@everyone", "")
 
+        # For every channel mentioned
         for channel in channel_mentions:
-            await channel.send(content=output, files=files)
-        
+            condition = channel.id in settings[1] if settings[0] else channel.id not in settings[1]
+            print(condition)
+
+
+            if condition:
+                files = []
+                for _file in glob.glob("file*.png"):
+                    files.append(discord.File(_file))
+
+                await channel.send(content=output, files=files)
+
+        # Clean the Files
         for _file in glob.glob("file*.png"):
             os.remove(_file)
-
-
-
 
 @client.event
 async def on_ready():
